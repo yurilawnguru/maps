@@ -60,6 +60,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.lang.IndexOutOfBoundsException;
 
 import javax.annotation.Nullable;
 
@@ -209,27 +210,39 @@ public class RCTMGLMapView extends MapView implements
     }
 
     public void removeFeature(int childPosition) {
-        AbstractMapFeature feature = mFeatures.get(childPosition);
-
-        if (feature == null) {
-            return;
-        }
-
-        if (feature instanceof RCTSource) {
-            RCTSource source = (RCTSource) feature;
-            mSources.remove(source.getID());
-        } else if (feature instanceof RCTMGLPointAnnotation) {
-            RCTMGLPointAnnotation annotation = (RCTMGLPointAnnotation) feature;
-
-            if (annotation.getMapboxID() == mActiveMarkerID) {
-                mActiveMarkerID = -1;
+        try {
+            AbstractMapFeature feature;
+            if (mQueuedFeatures != null && mQueuedFeatures.size() > 0) {
+                feature = mQueuedFeatures.get(childPosition);
+            } else {
+                feature = mFeatures.get(childPosition);
             }
 
-            mPointAnnotations.remove(annotation.getID());
-        }
+            if (feature == null) {
+                return;
+            }
 
-        feature.removeFromMap(this);
-        mFeatures.remove(feature);
+            if (feature instanceof RCTSource) {
+                RCTSource source = (RCTSource) feature;
+                mSources.remove(source.getID());
+            } else if (feature instanceof RCTMGLPointAnnotation) {
+                RCTMGLPointAnnotation annotation = (RCTMGLPointAnnotation) feature;
+
+                if (annotation.getMapboxID() == mActiveMarkerID) {
+                    mActiveMarkerID = -1;
+                }
+
+                mPointAnnotations.remove(annotation.getID());
+            }
+
+            feature.removeFromMap(this);
+            mFeatures.remove(feature);
+            if (mQueuedFeatures != null && mQueuedFeatures.size() > 0) {
+                mQueuedFeatures.remove(feature);
+            }
+         }catch(IndexOutOfBoundsException e){
+             return;
+         }
     }
 
     public int getFeatureCount() {
@@ -237,7 +250,14 @@ public class RCTMGLMapView extends MapView implements
     }
 
     public AbstractMapFeature getFeatureAt(int i) {
-        return mFeatures.get(i);
+        try{
+            if (mQueuedFeatures != null && mQueuedFeatures.size() > 0) {
+                return mQueuedFeatures.get(i);
+            }
+            return mFeatures.get(i);
+         }catch(IndexOutOfBoundsException e){
+             return null;
+         }
     }
 
     public synchronized void dispose() {
